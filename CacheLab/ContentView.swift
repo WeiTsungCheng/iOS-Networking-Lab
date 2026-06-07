@@ -34,6 +34,12 @@ struct ContentView: View {
                 
                 Section("Experiments") {
                     
+                    Button("Single Request") {
+                        Task {
+                            await viewModel.runSingleRequest()
+                        }
+                    }
+                    
                     Button("Run Request Twice") {
                         Task {
                             await viewModel.runRequestTwice()
@@ -71,7 +77,7 @@ struct ContentView: View {
                     }
                 }
                 
-            }
+            }.navigationTitle("URLCache Lab")
         }
     }
 }

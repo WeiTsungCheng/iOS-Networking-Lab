@@ -26,18 +26,21 @@ struct URLSessionFactory {
         return directory
     }
     
-    static let persistentCache = URLCache(
+    static var persistentCache = URLCache(
         memoryCapacity: 10 * 1024 * 1024,
         diskCapacity: 50 * 1024 * 1024,
         directory: cacheDirectory
     )
     
-    static let ephemeralMemoryCache = URLCache(
+    static var ephemeralMemoryCache = URLCache(
         memoryCapacity: 10 * 1024 * 1024,
         diskCapacity: 0
     )
     
-    static func makeSession(mode: SessionMode) -> URLSession {
+    static func makeSession(
+        mode: SessionMode,
+        delegate: URLSessionTaskDelegate? = nil
+    ) -> URLSession {
         let config: URLSessionConfiguration
         
         switch mode {
@@ -55,7 +58,7 @@ struct URLSessionFactory {
             config.requestCachePolicy = .reloadIgnoringLocalCacheData
         }
         
-        return URLSession(configuration: config)
+        return URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
     }
     
     static func cache(for mode: SessionMode) -> URLCache? {
@@ -67,6 +70,24 @@ struct URLSessionFactory {
         case .noCache:
             return nil
         }
+    }
+    
+    static func resetPersistentCache() {
+        persistentCache.removeAllCachedResponses()
+        persistentCache = URLCache(
+            memoryCapacity: 10 * 1024 * 1024,
+            diskCapacity: 50 * 1024 * 1024,
+            directory: cacheDirectory
+        )
+    }
+    
+    static func resetEphemeralMemoryCache() {
+        ephemeralMemoryCache.removeAllCachedResponses()
+        ephemeralMemoryCache = URLCache(
+            memoryCapacity: 10 * 1024 * 1024,
+            diskCapacity: 0,
+            directory: cacheDirectory
+        )
     }
     
 }

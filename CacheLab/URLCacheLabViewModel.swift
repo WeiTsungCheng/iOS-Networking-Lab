@@ -15,62 +15,53 @@ final class URLCacheLabViewModel {
     var output: String = "Ready"
     
     private let url = URL(string: "https://api.github.com/repos/apple/swift")!
+    private let metricsDelegate = SessionMetricsDelegate()
+    
+    func runSingleRequest() async {
+        
+        output = ""
+        appendExperimentHeader(title: "Single Request")
+        
+        await performRequest(
+            title: "Single Request",
+            cachePolicy: nil
+        )
+    }
     
     func runRequestTwice() async {
+        
         output = ""
-        append("""
-            Mode: \(selectedMode.title)
-            
-            Meaning: \(selectedMode.explanation)
-            
-            Target: \(url.absoluteString)
-            """)
+        appendExperimentHeader(title: "Request Twice")
         
-        let session = URLSessionFactory.makeSession(mode: selectedMode)
+        await performRequest(
+            title: "First Request",
+            cachePolicy: nil
+        )
         
-        await request(title: "First Request",
-                      session: session,
-                      cachePolicy: .useProtocolCachePolicy)
-        
-        await request(title: "Second Request",
-                      session: session,
-                      cachePolicy: .useProtocolCachePolicy)
+        await performRequest(
+            title: "Second Request",
+            cachePolicy: nil
+        )
     }
     
     func runCacheOnlyRequest() async {
         output = ""
-        append("""
-            ===== Cache Only Experiment =====
-            Mode: \(selectedMode.title)
-            
-            Request Policy: returnCacheDataLontLoad
-            
-            Meaning: Ony return cached data. Do not load from network
-            
-            """)
+        appendExperimentHeader(title: "Cache Only Request")
         
-        let session = URLSessionFactory.makeSession(mode: selectedMode)
-        
-        await request(title: "Cache Only Request",
-                      session: session,
-                      cachePolicy: .returnCacheDataDontLoad)
+        await performRequest(
+            title: "Cache Only Request",
+            cachePolicy: .returnCacheDataDontLoad
+        )
     }
     
     func runReloadIgnoringCacheRequest() async {
         output = ""
-        append("""
-            ====== Reload Ignoring Cache Experiment =====
-            Mode: \(selectedMode.title)
-            
-            Request Policy: reloadIgnoringLocalCacheData
-            
-            """)
+        appendExperimentHeader(title: "Reload Ignoring Cache Request")
         
-        let session = URLSessionFactory.makeSession(mode: selectedMode)
-        
-        await request(title: "Reload Ignoring Cache Request",
-                      session: session,
-                      cachePolicy: .reloadIgnoringLocalCacheData)
+        await performRequest(
+            title: "Reload Ignoring Cache Request",
+            cachePolicy: .reloadIgnoringLocalCacheData
+        )
     }
     
     func inspectCache() {
@@ -98,24 +89,38 @@ final class URLCacheLabViewModel {
     func clearCache() {
         switch selectedMode {
         case .default:
-            URLSessionFactory.persistentCache.removeAllCachedResponses()
+            URLSessionFactory.resetPersistentCache()
             output = "Default persistent cache cleared"
         case .ephemeral:
-            URLSessionFactory.ephemeralMemoryCache.removeAllCachedResponses()
+            URLSessionFactory.resetEphemeralMemoryCache()
             output = "Ephermeral cache is not persistent. Requires session or restart app to observe the difference"
         case .noCache:
             output = "No cache mode has no URLCache to clear"
         }
     }
     
+    private func performRequest(
+        title: String,
+        cachePolicy: URLRequest.CachePolicy? ) async {
+            
+            configureMetricsDelegate()
+            
+            let session = URLSessionFactory.makeSession(
+                mode: selectedMode,
+                delegate: metricsDelegate)
+            
+            await request(title: title, session: session, cachePolicy: cachePolicy)
+            
+            session.finishTasksAndInvalidate()
+        }
+    
     private func request(
         title: String,
         session: URLSession,
-        cachePolicy: URLRequest.CachePolicy
+        cachePolicy: URLRequest.CachePolicy?
     ) async {
         do {
-            var request = URLRequest(url: url)
-            request.cachePolicy = cachePolicy
+            let request = makeRequest(cachePolicy: cachePolicy)
             
             let beforeCache = URLSessionFactory.cache(for: selectedMode)
             let cachedBefore = beforeCache?.cachedResponse(for: request) != nil
@@ -135,7 +140,7 @@ final class URLCacheLabViewModel {
                 
                 Session Mode: \(selectedMode.title)
                 
-                Request Cache Policy: \(cachePolicy)
+                Request Cache Policy: \(cachePolicy, default: "nil")
                 
                 Cached Before Request: \(cachedBefore)
                 
@@ -166,12 +171,108 @@ final class URLCacheLabViewModel {
                 
                 Session Mode: \(selectedMode.title)
                 
-                Request Cache Policy: \(cachePolicy)
-
+                Request Cache Policy: \(cachePolicy, default: "nil")
+                
                 Error: \(error.localizedDescription)
-
+                
                 """)
         }
+    }
+    
+    // MARK: - Metrics
+    
+    private func configureMetricsDelegate() {
+        metricsDelegate.onMetricsCollected = { [weak self] metrics in
+            Task { @MainActor in
+                self?.appendMetrics(metrics)
+            }
+        }
+    }
+    
+    private func appendExperimentHeader(title: String) {
+        
+        append("""
+        ===== \(title) Experiment =====
+        
+        Mode: \(selectedMode.title)
+        
+        Meaning: \(selectedMode.explanation)
+        
+        Target: \(url.absoluteString)
+        
+        """)
+        
+    }
+    
+    
+    
+    private func appendMetrics(_ metrics: URLSessionTaskMetrics) {
+        append("""
+            ===== URLSessionTaskMetrics =====
+            
+            Redirect Count:
+            \(metrics.redirectCount)
+            
+            Transaction Count:
+            \(metrics.transactionMetrics.count)
+            
+            """)
+        
+        for (index, transaction) in metrics.transactionMetrics.enumerated() {
+            append("""
+                   
+                   Transaction \(index + 1):
+                   
+                   Resource Fetch Type: 
+                   \(describeFetchType(transaction.resourceFetchType))
+                   
+                   Network Protocol: \(transaction.networkProtocolName ?? "nil")
+                   
+                   Is Reused Connection: \(transaction.isReusedConnection)
+                   
+                   Request Start: \(transaction.requestStartDate?.description ?? "nil")
+                   
+                   Response Start: \(transaction.responseStartDate?.description ?? "nil")
+                   
+                   Response End: \(transaction.responseEndDate?.description ?? "nil")
+                   
+                   """)
+        }
+        
+    }
+    
+    // MARK: - Helpers
+    
+    private func makeRequest(cachePolicy: URLRequest.CachePolicy? = nil) -> URLRequest {
+        
+        var request = URLRequest(url: url)
+        
+        if let cachePolicy {
+            request.cachePolicy = cachePolicy
+        }
+        
+        return request
+    }
+    
+    private func describeFetchType(_ type: URLSessionTaskMetrics.ResourceFetchType) -> String {
+        
+        switch type {
+        case .unknown:
+            return "unknown (\(type.rawValue))"
+            
+        case .networkLoad:
+            return "networkLoad (\(type.rawValue))"
+            
+        case .serverPush:
+            return "serverPush (\(type.rawValue))"
+            
+        case .localCache:
+            return "localCache (\(type.rawValue))"
+            
+        @unknown default:
+            return "future case (\(type.rawValue))"
+        }
+        
     }
     
     
