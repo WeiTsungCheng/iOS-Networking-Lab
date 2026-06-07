@@ -9,7 +9,7 @@ import Foundation
 
 enum SessionMode: String, CaseIterable, Identifiable {
     var id: Self { self }
-    
+
     case `default`
     case ephemeral
     case noCache

@@ -17,6 +17,7 @@ final class URLCacheLabViewModel {
     private let url = URL(string: "https://api.github.com/repos/apple/swift")!
     private let metricsDelegate = SessionMetricsDelegate()
     
+    // 單純打ㄧ次 API
     func runSingleRequest() async {
         
         output = ""
@@ -28,6 +29,7 @@ final class URLCacheLabViewModel {
         )
     }
     
+    // 連續打兩次 API
     func runRequestTwice() async {
         
         output = ""
@@ -44,6 +46,7 @@ final class URLCacheLabViewModel {
         )
     }
     
+    // 只取 Cache 不真的打網路
     func runCacheOnlyRequest() async {
         output = ""
         appendExperimentHeader(title: "Cache Only Request")
@@ -54,6 +57,7 @@ final class URLCacheLabViewModel {
         )
     }
     
+    // 無論有無 Cache 都打網路
     func runReloadIgnoringCacheRequest() async {
         output = ""
         appendExperimentHeader(title: "Reload Ignoring Cache Request")
@@ -107,11 +111,11 @@ final class URLCacheLabViewModel {
             
             let session = URLSessionFactory.makeSession(
                 mode: selectedMode,
-                delegate: metricsDelegate)
+                delegate: metricsDelegate) // 在生成 Session 時, 將自製的 delegate 的物件傳入
             
             await request(title: title, session: session, cachePolicy: cachePolicy)
             
-            session.finishTasksAndInvalidate()
+            session.finishTasksAndInvalidate() // Session 在 Task 完成後需要清除, 避免 delegate 發生錯誤
         }
     
     private func request(
@@ -219,6 +223,8 @@ final class URLCacheLabViewModel {
             """)
         
         for (index, transaction) in metrics.transactionMetrics.enumerated() {
+            
+            //每一個 transaction 代表：這個 URLSession task 裡的一段 request/response 過程。
             append("""
                    
                    Transaction \(index + 1):

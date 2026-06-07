@@ -51,11 +51,11 @@ struct URLSessionFactory {
             config = .ephemeral
             // ephemeral 的儲存是內部機制, 這裡直接寫入是為了觀察只有 memory 有資料 disk 沒有
             config.urlCache = ephemeralMemoryCache
-            config.requestCachePolicy = .useProtocolCachePolicy
+            config.requestCachePolicy = .useProtocolCachePolicy // 要不要使用快取，由 HTTP 協定（Cache-Control、Expires、ETag 等 Header）來決定
         case .noCache:
             config = .default
             config.urlCache = nil
-            config.requestCachePolicy = .reloadIgnoringLocalCacheData
+            config.requestCachePolicy = .reloadIgnoringLocalCacheData // 不要相信本機快取（Cache），每次都直接去網路抓最新資料。
         }
         
         return URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
@@ -72,6 +72,7 @@ struct URLSessionFactory {
         }
     }
     
+    // 為 .default 設定客製化的 Cache
     static func resetPersistentCache() {
         persistentCache.removeAllCachedResponses()
         persistentCache = URLCache(
@@ -81,6 +82,7 @@ struct URLSessionFactory {
         )
     }
     
+    // 為 .ephemeral 設定客製化的 Cache (實際專案不需要, 這裡只是為了驗證真的會存在 memory 而設置)
     static func resetEphemeralMemoryCache() {
         ephemeralMemoryCache.removeAllCachedResponses()
         ephemeralMemoryCache = URLCache(
