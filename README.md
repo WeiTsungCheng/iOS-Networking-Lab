@@ -1,3 +1,6 @@
+
+![image](https://github.com/WeiTsungCheng/iOS-Networking-Lab/blob/main/demo/screenshot.png)
+
 # iOS Networking Lab
 
 A SwiftUI playground project for learning and experimenting with:
